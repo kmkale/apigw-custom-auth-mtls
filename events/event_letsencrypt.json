@@ -1,0 +1,47 @@
+{
+  "version": "2.0",
+  "type": "REQUEST",
+  "routeArn": "arn:aws:execute-api:<region>:<aws account number>:<api id>/<api stage>/<path>",
+  "identitySource": ["kk-mtls-4"],
+  "routeKey": "GET /v1/banking/accounts",
+  "rawPath": "/dev/v1/banking/accounts",
+  "rawQueryString": "",
+  "headers": {
+    "accept": "*/*",
+    "authorization": "kk-mtls-4",
+    "content-length": "0",
+    "host": "<your custom domain>",
+    "user-agent": "curl/7.54.0",
+    "x-forwarded-for": "some ip"
+  },
+  "requestContext": {
+    "accountId": "<aws account number>",
+    "apiId": "<api id>",
+    "authentication": {
+      "clientCert": {
+        "clientCertPem": "<your lets encrypt cert pem file contents without line breaks>",
+        "issuerDN": "C=US,O=Let's Encrypt,CN=Let's Encrypt Authority X3",
+        "serialNumber": "your lets encrypt cert serial no",
+        "subjectDN": "CN=<cert CN>",
+        "validity": {
+          "notAfter": "Dec 26 06:38:49 2020 GMT",
+          "notBefore": "Sep 27 06:38:49 2020 GMT"
+        }
+      }
+    },
+    "domainName": "<your custom domain>",
+    "domainPrefix": "domainPrefix",
+    "http": {
+      "method": "GET",
+      "path": "/dev/v1/banking/accounts",
+      "protocol": "HTTP/1.1",
+      "sourceIp": "someIp:23410",
+      "userAgent": "curl/7.54.0"
+    },
+    "requestId": "ThNYshgQSwMEM-g=",
+    "routeKey": "GET /v1/banking/accounts",
+    "stage": "dev",
+    "time": "27/Sep/2020:09:32:39 +0000",
+    "timeEpoch": 1601199159552
+  }
+}

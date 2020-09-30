@@ -1,0 +1,47 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  lambda-authoriser
+
+  Sample SAM Template for lambda-authoriser
+
+Globals:
+  Function:
+    Timeout: 30
+
+Resources:
+  CustomAuthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: mtls_custom_auth
+      CodeUri: mtls_custom_auth/
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Environment:
+        Variables:
+          TRUSTSTORE_BUCKET: !Ref TrustStoreBucket
+          TRUSTSTORE_FILENAME: !Ref TrustStoreFilename
+          TRUSTSTORE_FILE_VERSIONID: !Ref TrustStoreFileVersionId
+
+Parameters:
+  TrustStoreBucket:
+    Type: String
+    Description: "Name of S3 bucket which holds truststore pem file"
+  TrustStoreFilename:
+    Type: String
+    Description: "Name of truststore pem file in the trust store S3 bucket"
+    Default: "truststore.pem"
+  TrustStoreFileVersionId:
+    Type: String
+    Description: "Version Id of truststore pem file in the trust store S3 bucket"
+
+
+
+
+Outputs:
+  CustomAuthFunction:
+    Description: "Custom Auth Lambda Function ARN"
+    Value: !GetAtt CustomAuthFunction.Arn
+  CustomAuthFunctionIamRole:
+    Description: "Implicit IAM Role created for Hello World function"
+    Value: !GetAtt CustomAuthFunctionRole.Arn

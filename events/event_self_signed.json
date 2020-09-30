@@ -1,0 +1,47 @@
+{
+  "version": "2.0",
+  "type": "REQUEST",
+  "routeArn": "arn:aws:execute-api:<region>:<aws account number>:<api id>/<api stage>/<path>",
+  "identitySource": ["kk-mtls-4"],
+  "routeKey": "GET /v1/banking/accounts",
+  "rawPath": "/dev/v1/banking/accounts",
+  "rawQueryString": "",
+  "headers": {
+    "accept": "*/*",
+    "authorization": "kk-mtls-4",
+    "content-length": "0",
+    "host": "<your custom domain>",
+    "user-agent": "curl/7.54.0",
+    "x-forwarded-for": "some ip"
+  },
+  "requestContext": {
+    "accountId": "<aws account number>",
+    "apiId": "<api id>",
+    "authentication": {
+      "clientCert": {
+        "clientCertPem": "<your self signed cert pem file contents without line breaks>",
+        "issuerDN": "C=AU,ST=Victoria,L=Melbourne,O=Contino,OU=Open Banking,CN=Private Root CA",
+        "serialNumber": "1",
+        "subjectDN": "CN=OB mTLS Client,C=AU,L=Melbourne,O=Contino,OU=Open Banking Client,ST=Victoria",
+        "validity": {
+          "notAfter": "Sep 27 12:37:27 2021 GMT",
+          "notBefore": "Sep 27 12:37:27 2020 GMT"
+        }
+      }
+    },
+    "domainName": "<your domain>",
+    "domainPrefix": "openbanking",
+    "http": {
+      "method": "GET",
+      "path": "/dev/v1/banking/accounts",
+      "protocol": "HTTP/1.1",
+      "sourceIp": "someIp:33180",
+      "userAgent": "curl/7.54.0"
+    },
+    "requestId": "ThoyLhsgSwMEMBw=",
+    "routeKey": "GET /v1/banking/accounts",
+    "stage": "dev",
+    "time": "27/Sep/2020:12:39:41 +0000",
+    "timeEpoch": 1601210381825
+  }
+}
