@@ -1,47 +1,191 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  lambda-authoriser
+  API Gateway Mutual TLS Auth demo
 
-  Sample SAM Template for lambda-authoriser
+  Sample SAM Template for demonstrating Mutual TLS Auth for AWS API Gateway
 
 Globals:
   Function:
     Timeout: 30
 
 Resources:
+  TrustStoreS3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'kk-mtls-auth-truststore-${AWS::Region}-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+    DeletionPolicy: Delete
+
+  GetAccountsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: getAccountsMTLSDemo
+      CodeUri: get-accounts/
+      Handler: index.handler
+      Runtime: nodejs12.x
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: get
+            Path: /v1/banking/accounts
+            TimeoutInMillis: 29999
+
+  ACMCertificate:
+    Type: 'AWS::CertificateManager::Certificate'
+    Properties:
+      DomainName: !Ref DomainName
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+      ValidationMethod: DNS
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    DependsOn: ACMCertificate
+    Properties:
+      StageName: dev
+      # This is not supported by AWS::Serverless::HttpApi yet
+      # DisableExecuteApiEndpoint: true
+      AccessLogSettings:
+        DestinationArn: !GetAtt AccessLogs.Arn
+        Format: $context.identity.sourceIp - - [$context.requestTime] "$context.httpMethod $context.routeKey $context.protocol" $context.status $context.responseLength $context.requestId context.error.message:"$context.error.message" - - context.integration.error:"$context.integration.error" - - context.authorizer.error:"$context.authorizer.error" - - context.authorizer.exception:"$context.authorizer.exception"
+
+  CustomDomain:
+    Type: AWS::ApiGatewayV2::DomainName
+    Properties:
+      DomainName: !Ref DomainName
+      # MutualTlsAuthentication should be commented out in the first run of sam deploy
+      # Then upload the truststore.pem file to the truststore S3 bucket created in the first run
+      # Grab the versionId of the file, put it as a parameter
+      # then uncomented and run sam deploy again to enable mutual tls
+      MutualTlsAuthentication:
+        TruststoreUri: !Sub 's3://kk-mtls-auth-truststore-${AWS::Region}-${AWS::AccountId}/${TrustStoreFilename}'
+        TruststoreVersion: !Ref TrustStoreFileVersionId
+      DomainNameConfigurations:
+        - EndpointType: REGIONAL
+          CertificateArn: !Ref ACMCertificate
+
+  ApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    DependsOn:
+      - HttpApi
+      - HttpApidevStage
+    Properties:
+      DomainName: !Ref CustomDomain
+      ApiId: !Ref HttpApi
+      Stage: dev
+      ApiMappingKey: 'cds-au'
+
+  DnsRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !Sub ${CustomDomain.RegionalDomainName}
+        HostedZoneId: !Sub ${CustomDomain.RegionalHostedZoneId}
+
+  AccessLogs:
+    Type: AWS::Logs::LogGroup
+
   CustomAuthFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: mtls_custom_auth
+      FunctionName: CertRevocationCheck
       CodeUri: mtls_custom_auth/
       Handler: app.lambda_handler
       Runtime: python3.8
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:ListBucketVersions
+                - s3:ListBucket
+                - s3:GetObjectVersion
+              Resource:
+                - !Sub '${TrustStoreS3Bucket.Arn}/*'
+                - !GetAtt TrustStoreS3Bucket.Arn
       Environment:
         Variables:
-          TRUSTSTORE_BUCKET: !Ref TrustStoreBucket
+          TRUSTSTORE_BUCKET: !Sub 'kk-mtls-auth-truststore-${AWS::Region}-${AWS::AccountId}'
           TRUSTSTORE_FILENAME: !Ref TrustStoreFilename
           TRUSTSTORE_FILE_VERSIONID: !Ref TrustStoreFileVersionId
 
+  ApiAuthoriserInvokePermission:
+    Type: AWS::Lambda::Permission
+    DependsOn: CustomAuthorizer
+    Properties:
+      FunctionName: !GetAtt CustomAuthFunction.Arn
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !Join
+        - ''
+        - - 'arn:aws:execute-api:'
+          - !Ref 'AWS::Region'
+          - ':'
+          - !Ref 'AWS::AccountId'
+          - ':'
+          - !Ref HttpApi
+          - '/authorizers/'
+          - !Ref CustomAuthorizer
+
+  CustomAuthorizer:
+    Type: 'AWS::ApiGatewayV2::Authorizer'
+    Properties:
+      Name: LambdaAuthorizer
+      ApiId: !Ref HttpApi
+      AuthorizerType: REQUEST
+      EnableSimpleResponses: true
+      AuthorizerPayloadFormatVersion: 2.0
+      AuthorizerUri: !Join
+        - ''
+        - - 'arn:'
+          - !Ref 'AWS::Partition'
+          - ':apigateway:'
+          - !Ref 'AWS::Region'
+          - ':lambda:path/2015-03-31/functions/'
+          - !GetAtt CustomAuthFunction.Arn
+          - /invocations
+      AuthorizerResultTtlInSeconds: 5
+      IdentitySource:
+        - $request.header.Authorization
+
+  # RouteAuthoriserAttachment:
+  #   Type: AWS::ApiGatewayV2::Route
+  #   Properties:
+  #     ApiId: !Ref HttpApi
+  #     RouteKey: 'GET /v1/banking/accounts'
+  #     AuthorizerId: !Ref CustomAuthorizer
+
 Parameters:
-  TrustStoreBucket:
-    Type: String
-    Description: "Name of S3 bucket which holds truststore pem file"
   TrustStoreFilename:
     Type: String
-    Description: "Name of truststore pem file in the trust store S3 bucket"
-    Default: "truststore.pem"
+    Description: 'Name of truststore pem file in the trust store S3 bucket'
+    Default: 'truststore.pem'
   TrustStoreFileVersionId:
     Type: String
-    Description: "Version Id of truststore pem file in the trust store S3 bucket"
-
-
-
+    Description: 'Version Id of truststore pem file in the trust store S3 bucket'
+  DomainName:
+    Type: String
+    Description: 'Domain for Api'
+  HostedZoneId:
+    Type: String
+    Description: 'Route53 hosted zone id'
 
 Outputs:
-  CustomAuthFunction:
-    Description: "Custom Auth Lambda Function ARN"
-    Value: !GetAtt CustomAuthFunction.Arn
-  CustomAuthFunctionIamRole:
-    Description: "Implicit IAM Role created for Hello World function"
-    Value: !GetAtt CustomAuthFunctionRole.Arn
+  HttpApiUrl:
+    Description: URL of API endpoint
+    Value:
+      Fn::Sub: 'https://${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/dev/v1/banking/accounts'
